@@ -1,6 +1,5 @@
 package in.hamids.moneymanager.security;
 
-import in.hamids.moneymanager.service.AppUserDetailsService;
 import in.hamids.moneymanager.util.JwtUtil;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
