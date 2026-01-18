@@ -1,12 +1,14 @@
 package in.hamids.moneymanager.service;
 
 import in.hamids.moneymanager.dto.ExpenseDTO;
+import in.hamids.moneymanager.dto.ProfileDTO;
 import in.hamids.moneymanager.entity.CategoryEntity;
 import in.hamids.moneymanager.entity.ExpenseEntity;
 import in.hamids.moneymanager.entity.ProfileEntity;
 import in.hamids.moneymanager.repository.CategoryRepository;
 import in.hamids.moneymanager.repository.ExpenseRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -65,6 +67,23 @@ public class ExpenseService {
         ProfileEntity profile = profileService.getCurrentProfile();
         BigDecimal total = expenseRepository.findTotalExpensesByProfileId(profile.getId());
         return total != null ? total : BigDecimal.ZERO;
+    }
+
+    // filter expenses
+    public List<ExpenseDTO> filterExpenses(LocalDate startDate,
+                                           LocalDate endDate,
+                                           String keyword,
+                                           Sort sort
+    ) {
+        ProfileEntity profile = profileService.getCurrentProfile();
+        List<ExpenseEntity> list = expenseRepository
+                .findByProfileIdAndDateBetweenAndNameContainingIgnoreCase(profile.getId(),
+                                                                            startDate,
+                                                                            endDate,
+                                                                            keyword,
+                                                                            sort
+                );
+        return list.stream().map(this::toDto).toList();
     }
 
     //--------------------------HELPER METHODS--------------------------

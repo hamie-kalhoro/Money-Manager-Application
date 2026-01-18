@@ -9,6 +9,7 @@ import in.hamids.moneymanager.entity.ProfileEntity;
 import in.hamids.moneymanager.repository.CategoryRepository;
 import in.hamids.moneymanager.repository.IncomeRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -67,6 +68,23 @@ public class IncomeService {
         ProfileEntity profile = profileService.getCurrentProfile();
         BigDecimal total = incomeRepository.findTotalExpensesByProfileId(profile.getId());
         return total != null ? total : BigDecimal.ZERO;
+    }
+
+    // filter incomes
+    public List<IncomeDTO> filterIncomes(LocalDate startDate,
+                                           LocalDate endDate,
+                                           String keyword,
+                                           Sort sort
+    ) {
+        ProfileEntity profile = profileService.getCurrentProfile();
+        List<IncomeEntity> list = incomeRepository
+                .findByProfileIdAndDateBetweenAndNameContainingIgnoreCase(profile.getId(),
+                        startDate,
+                        endDate,
+                        keyword,
+                        sort
+                );
+        return list.stream().map(this::toDto).toList();
     }
 
     //--------------------------HELPER METHODS--------------------------
