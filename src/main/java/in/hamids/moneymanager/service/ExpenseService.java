@@ -1,7 +1,6 @@
 package in.hamids.moneymanager.service;
 
 import in.hamids.moneymanager.dto.ExpenseDTO;
-import in.hamids.moneymanager.dto.ProfileDTO;
 import in.hamids.moneymanager.entity.CategoryEntity;
 import in.hamids.moneymanager.entity.ExpenseEntity;
 import in.hamids.moneymanager.entity.ProfileEntity;
@@ -71,18 +70,16 @@ public class ExpenseService {
 
     // filter expenses
     public List<ExpenseDTO> filterExpenses(LocalDate startDate,
-                                           LocalDate endDate,
-                                           String keyword,
-                                           Sort sort
-    ) {
+            LocalDate endDate,
+            String keyword,
+            Sort sort) {
         ProfileEntity profile = profileService.getCurrentProfile();
         List<ExpenseEntity> list = expenseRepository
                 .findByProfileIdAndDateBetweenAndNameContainingIgnoreCase(profile.getId(),
-                                                                            startDate,
-                                                                            endDate,
-                                                                            keyword,
-                                                                            sort
-                );
+                        startDate,
+                        endDate,
+                        keyword,
+                        sort);
         return list.stream().map(this::toDto).toList();
     }
 
@@ -92,7 +89,7 @@ public class ExpenseService {
         return list.stream().map(this::toDto).toList();
     }
 
-    //--------------------------HELPER METHODS--------------------------
+    // --------------------------HELPER METHODS--------------------------
     private ExpenseEntity toEntity(ExpenseDTO dto, ProfileEntity profile, CategoryEntity category) {
         return ExpenseEntity.builder()
                 .name(dto.getName())
