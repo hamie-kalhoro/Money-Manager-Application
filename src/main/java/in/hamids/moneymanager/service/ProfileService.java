@@ -13,6 +13,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
@@ -28,20 +31,48 @@ public class ProfileService {
     private final AuthenticationManager authenticationManager;
     private final JwtUtil jwtUtil;
 
+    @Value("${spring.profiles.active:dev}")
+    private String activeProfile;
+
     @Value("${app.backend.url}")
     private String activationUrl;
 
     public ProfileDTO registerProfile(ProfileDTO profileDTO) {
-        ProfileEntity newProfile = toEntity(profileDTO);
-        newProfile.setActivationToken(UUID.randomUUID().toString());
-        newProfile = profileRepository.save(newProfile);
-        //send activation email
-        String activationLink = activationUrl+"/api/v1.0/activate?token=" + newProfile.getActivationToken();
+        // Check if user already exists
+        ProfileEntity existingProfile = profileRepository.findByEmail(profileDTO.getEmail()).orElse(null);
+        
+        ProfileEntity profileToProcess;
+        if (existingProfile != null) {
+            if (existingProfile.getIsActive()) {
+                throw new RuntimeException("Email already registered and active. Please login.");
+            }
+            // If exists but not active, refresh the token and resend email
+            existingProfile.setActivationToken(UUID.randomUUID().toString());
+            profileToProcess = profileRepository.save(existingProfile);
+        } else {
+            // New registration
+            profileToProcess = toEntity(profileDTO);
+            profileToProcess.setActivationToken(UUID.randomUUID().toString());
+            profileToProcess.setIsActive(false);
+            profileToProcess = profileRepository.save(profileToProcess);
+        }
+        
+        // Send activation email
+        String activationLink = activationUrl + "/api/v1.0/activate?token=" + profileToProcess.getActivationToken();
         String subject = "Activate your Money Manager account";
         String body = "Click on the following link to activate your account: " + activationLink;
-        emailService.sendEmail(newProfile.getEmail(), subject, body);
-        return toDTO(newProfile);
+        
+        try {
+            emailService.sendEmail(profileToProcess.getEmail(), subject, body);
+        } catch (Exception e) {
+            System.err.println("Email sending failed for " + profileToProcess.getEmail() + ": " + e.getMessage());
+            // We don't delete the user here, allowing them to try again (which will trigger the 'resend' logic above)
+            throw new RuntimeException("Email sending failed. Please check your SMTP credentials or try again later."); 
+        }
+        
+        return toDTO(profileToProcess);
     }
+
 
     public ProfileEntity toEntity(ProfileDTO profileDTO) {
         return ProfileEntity.builder()
@@ -83,6 +114,20 @@ public class ProfileService {
     }
 
     public ProfileEntity getCurrentProfile() {
+        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attributes != null) {
+            HttpServletRequest request = attributes.getRequest();
+            ProfileEntity cached = (ProfileEntity) request.getAttribute("CACHED_PROFILE");
+            if (cached != null) return cached;
+            
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            ProfileEntity profile = profileRepository.findByEmail(authentication.getName()).orElseThrow(() ->
+                    new UsernameNotFoundException("Profile not found with email: " + authentication.getName()));
+            
+            request.setAttribute("CACHED_PROFILE", profile);
+            return profile;
+        }
+        
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return profileRepository.findByEmail(authentication.getName()).orElseThrow(() ->
                 new UsernameNotFoundException("Profile not found with email: " + authentication.getName()));

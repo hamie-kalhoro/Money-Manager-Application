@@ -4,6 +4,7 @@ import in.hamids.moneymanager.dto.AuthDTO;
 import in.hamids.moneymanager.dto.ProfileDTO;
 import in.hamids.moneymanager.service.ProfileService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,19 +18,33 @@ public class ProfileController {
     private final ProfileService profileService;
 
     @PostMapping("/register")
-    public ResponseEntity<ProfileDTO> registerProfile(
-            @RequestBody ProfileDTO profileDTO) {
-        ProfileDTO registeredProfile = profileService.registerProfile(profileDTO);
-        return ResponseEntity.status(HttpStatus.CREATED).body(registeredProfile);
+    public ResponseEntity<?> registerProfile(@RequestBody ProfileDTO profileDTO) {
+        try {
+            ProfileDTO registeredProfile = profileService.registerProfile(profileDTO);
+            return ResponseEntity.status(HttpStatus.CREATED).body(registeredProfile);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "Message", "Registration failed: " + (e.getMessage() != null ? e.getMessage() : "Unknown error")
+            ));
+        }
     }
 
+
+    @Value("${money.manager.frontend.url}")
+    private String frontendUrl;
+
     @GetMapping("/activate")
-    public ResponseEntity<String> activateProfile(@RequestParam String token) {
+    public ResponseEntity<Void> activateProfile(@RequestParam String token) {
         boolean isActivated = profileService.activateProfile(token);
         if (isActivated) {
-            return ResponseEntity.ok("Profile activated successfully.");
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .header("Location", frontendUrl + "/login?activated=true")
+                    .build();
         } else {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Activation token not found or already used. ");
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .header("Location", frontendUrl + "/login?error=activation_failed")
+                    .build();
         }
     }
 

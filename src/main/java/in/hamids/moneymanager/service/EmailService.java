@@ -16,6 +16,9 @@ public class EmailService {
     @Value("${spring.mail.properties.mail.smtp.from:${BREVO_FROM_EMAIL:}}")
     private String fromEmail;
 
+    @Value("${spring.mail.username:}")
+    private String mailUsername;
+
     public void sendEmail(String to, String subject, String body) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
@@ -25,7 +28,12 @@ public class EmailService {
             message.setText(body);
             mailSender.send(message);
         } catch (Exception e) {
-            throw new RuntimeException(e.getMessage());
+            String maskedUser = (mailUsername != null && mailUsername.length() > 4) 
+                ? mailUsername.substring(0, 4) + "****" 
+                : "unknown";
+            System.err.println("SMTP Error - User: " + mailUsername + ", Sender: " + fromEmail + ", Error: " + e.getMessage());
+            e.printStackTrace(); 
+            throw new RuntimeException("Email service failed (Auth User: " + maskedUser + "): " + e.getMessage());
         }
     }
 }

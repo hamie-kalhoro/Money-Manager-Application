@@ -6,6 +6,7 @@ import in.hamids.moneymanager.dto.RecentTransactionDTO;
 import in.hamids.moneymanager.entity.ProfileEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,13 +23,22 @@ public class DashboardService {
 
     public Map<String, Object> getDashboardData() {
         ProfileEntity profile = profileService.getCurrentProfile();
+        Long profileId = profile.getId();
+        
         Map<String, Object> returnValue = new LinkedHashMap<>();
+        
+        // Use optimized service methods or repositories directly for speed
         List<IncomeDTO> latestIncomes = incomeService.getLatest5IncomesForCurrentUser();
         List<ExpenseDTO> latestExpenses = expenseService.getLatest5ExpensesForCurrentUser();
+        
+        BigDecimal totalIncome = incomeService.getTotalIncomeForCurrentUser();
+        BigDecimal totalExpense = expenseService.getTotalExpenseForCurrentUser();
+        BigDecimal totalBalance = totalIncome.subtract(totalExpense);
+
         List<RecentTransactionDTO> recentTransactions = concat(latestIncomes.stream().map(income ->
                         RecentTransactionDTO.builder()
                                 .id(income.getId())
-                                .profileId(profile.getId())
+                                .profileId(profileId)
                                 .icon(income.getIcon())
                                 .name(income.getName())
                                 .amount(income.getAmount())
@@ -40,7 +50,7 @@ public class DashboardService {
                 latestExpenses.stream().map(expense ->
                         RecentTransactionDTO.builder()
                                 .id(expense.getId())
-                                .profileId(profile.getId())
+                                .profileId(profileId)
                                 .icon(expense.getIcon())
                                 .name(expense.getName())
                                 .amount(expense.getAmount())
@@ -55,11 +65,11 @@ public class DashboardService {
                         return b.getCreatedAt().compareTo(a.getCreatedAt());
                     }
                     return cmp;
-                }).toList();
-        returnValue.put("totalBalance", incomeService.getTotalIncomeForCurrentUser()
-                .subtract(expenseService.getTotalExpenseForCurrentUser()));
-        returnValue.put("totalIncome", incomeService.getTotalIncomeForCurrentUser());
-        returnValue.put("totalExpense", expenseService.getTotalExpenseForCurrentUser());
+                }).limit(10).toList(); // Limit to 10 for performance
+
+        returnValue.put("totalBalance", totalBalance);
+        returnValue.put("totalIncome", totalIncome);
+        returnValue.put("totalExpense", totalExpense);
         returnValue.put("recent5Expenses", latestExpenses);
         returnValue.put("recent5Incomes", latestIncomes);
         returnValue.put("recentTransactions", recentTransactions);

@@ -10,12 +10,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import org.springframework.transaction.annotation.Transactional;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import jakarta.persistence.EntityNotFoundException;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class ExpenseService {
 
     private final CategoryRepository categoryRepository;
@@ -25,8 +29,8 @@ public class ExpenseService {
     // Adds a new expense to the database
     public ExpenseDTO addExpense(ExpenseDTO dto) {
         ProfileEntity profile = profileService.getCurrentProfile();
-        CategoryEntity category = categoryRepository.findById(dto.getCategoryId())
-                .orElseThrow(() -> new RuntimeException("Category not found"));
+        CategoryEntity category = categoryRepository.findByIdAndProfileId(dto.getCategoryId(), profile.getId())
+                .orElseThrow(() -> new RuntimeException("Category not found or does not belong to the current user"));
         ExpenseEntity newExpense = toEntity(dto, profile, category);
         newExpense = expenseRepository.save(newExpense);
         return toDto(newExpense);
@@ -58,6 +62,13 @@ public class ExpenseService {
     public List<ExpenseDTO> getLatest5ExpensesForCurrentUser() {
         ProfileEntity profile = profileService.getCurrentProfile();
         List<ExpenseEntity> list = expenseRepository.findTop5ByProfileIdOrderByDateDesc(profile.getId());
+        return list.stream().map(this::toDto).toList();
+    }
+
+    // Get all expenses for current user (ordered by date desc)
+    public List<ExpenseDTO> getAllExpensesForCurrentUser() {
+        ProfileEntity profile = profileService.getCurrentProfile();
+        List<ExpenseEntity> list = expenseRepository.findByProfileIdOrderByDateDesc(profile.getId());
         return list.stream().map(this::toDto).toList();
     }
 
@@ -102,12 +113,23 @@ public class ExpenseService {
     }
 
     private ExpenseDTO toDto(ExpenseEntity entity) {
+        Long categoryId = null;
+        String categoryName = "N/A";
+        try {
+            if (entity.getCategory() != null) {
+                categoryId = entity.getCategory().getId();
+                categoryName = entity.getCategory().getName();
+            }
+        } catch (EntityNotFoundException ex) {
+            // Missing referenced category in DB — fall back to safe defaults
+        }
+
         return ExpenseDTO.builder()
                 .id(entity.getId())
                 .name(entity.getName())
                 .icon(entity.getIcon())
-                .categoryId(entity.getCategory() != null ? entity.getCategory().getId() : null)
-                .categoryName(entity.getCategory() != null ? entity.getCategory().getName() : "N/A")
+                .categoryId(categoryId)
+                .categoryName(categoryName)
                 .amount(entity.getAmount())
                 .date(entity.getDate())
                 .createdAt(entity.getCreatedAt())

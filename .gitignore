@@ -32,3 +32,11 @@ build/
 ### VS Code ###
 .vscode/
 .env
+
+# Custom temp files
+*.log
+*.json
+data/
+TestDb.java
+TestDb.class
+

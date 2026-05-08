@@ -1,9 +1,7 @@
 package in.hamids.moneymanager.service;
 
-import in.hamids.moneymanager.dto.ExpenseDTO;
 import in.hamids.moneymanager.dto.IncomeDTO;
 import in.hamids.moneymanager.entity.CategoryEntity;
-import in.hamids.moneymanager.entity.ExpenseEntity;
 import in.hamids.moneymanager.entity.IncomeEntity;
 import in.hamids.moneymanager.entity.ProfileEntity;
 import in.hamids.moneymanager.repository.CategoryRepository;
@@ -12,12 +10,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import org.springframework.transaction.annotation.Transactional;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import jakarta.persistence.EntityNotFoundException;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class IncomeService {
 
     private final CategoryRepository categoryRepository;
@@ -27,11 +29,11 @@ public class IncomeService {
     // Adds a new expense to the database
     public IncomeDTO addIncome(IncomeDTO dto) {
         ProfileEntity profile = profileService.getCurrentProfile();
-        CategoryEntity category = categoryRepository.findById(dto.getCategoryId())
-                .orElseThrow(() -> new RuntimeException("Category not found"));
-        IncomeEntity newExpense = toEntity(dto, profile, category);
-        newExpense = incomeRepository.save(newExpense);
-        return toDto(newExpense);
+        CategoryEntity category = categoryRepository.findByIdAndProfileId(dto.getCategoryId(), profile.getId())
+                .orElseThrow(() -> new RuntimeException("Category not found or does not belong to the current user"));
+        IncomeEntity newIncome = toEntity(dto, profile, category);
+        newIncome = incomeRepository.save(newIncome);
+        return toDto(newIncome);
     }
 
     // Retrieves all incomes for current month/based on the start and end date
@@ -63,36 +65,40 @@ public class IncomeService {
         return list.stream().map(this::toDto).toList();
     }
 
+    // Get all incomes for current user (ordered by date desc)
+    public List<IncomeDTO> getAllIncomesForCurrentUser() {
+        ProfileEntity profile = profileService.getCurrentProfile();
+        List<IncomeEntity> list = incomeRepository.findByProfileIdOrderByDateDesc(profile.getId());
+        return list.stream().map(this::toDto).toList();
+    }
+
     // Get total expenses for current user
     public BigDecimal getTotalIncomeForCurrentUser() {
         ProfileEntity profile = profileService.getCurrentProfile();
-        BigDecimal total = incomeRepository.findTotalExpensesByProfileId(profile.getId());
+        BigDecimal total = incomeRepository.findTotalIncomeByProfileId(profile.getId());
         return total != null ? total : BigDecimal.ZERO;
     }
 
     // filter incomes
     public List<IncomeDTO> filterIncomes(LocalDate startDate,
-                                           LocalDate endDate,
-                                           String keyword,
-                                           Sort sort
-    ) {
+            LocalDate endDate,
+            String keyword,
+            Sort sort) {
         ProfileEntity profile = profileService.getCurrentProfile();
         List<IncomeEntity> list = incomeRepository
                 .findByProfileIdAndDateBetweenAndNameContainingIgnoreCase(profile.getId(),
                         startDate,
                         endDate,
                         keyword,
-                        sort
-                );
+                        sort);
         return list.stream().map(this::toDto).toList();
     }
 
-    //--------------------------HELPER METHODS--------------------------
+    // --------------------------HELPER METHODS--------------------------
     private IncomeEntity toEntity(
-                                    IncomeDTO dto,
-                                    ProfileEntity profile,
-                                    CategoryEntity category
-    ) {
+            IncomeDTO dto,
+            ProfileEntity profile,
+            CategoryEntity category) {
         return IncomeEntity.builder()
                 .name(dto.getName())
                 .icon(dto.getIcon())
@@ -104,12 +110,23 @@ public class IncomeService {
     }
 
     private IncomeDTO toDto(IncomeEntity entity) {
+        Long categoryId = null;
+        String categoryName = "N/A";
+        try {
+            if (entity.getCategory() != null) {
+                categoryId = entity.getCategory().getId();
+                categoryName = entity.getCategory().getName();
+            }
+        } catch (EntityNotFoundException ex) {
+            // Missing referenced category in DB — fall back to safe defaults
+        }
+
         return IncomeDTO.builder()
                 .id(entity.getId())
                 .name(entity.getName())
                 .icon(entity.getIcon())
-                .categoryId(entity.getCategory() != null ? entity.getCategory().getId() : null)
-                .categoryName(entity.getCategory() != null ? entity.getCategory().getName() : "N/A")
+                .categoryId(categoryId)
+                .categoryName(categoryName)
                 .amount(entity.getAmount())
                 .date(entity.getDate())
                 .createdAt(entity.getCreatedAt())
